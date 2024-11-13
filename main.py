@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
 import sys
-from tqdm import tqdm  # Progress bar
+from tqdm import tqdm
 
 def validate_path(source_path, check_is_dir=False):
     if check_is_dir:
@@ -37,16 +37,20 @@ def create_watermark():
         font_path = "/System/Library/Fonts/Supplemental/Copperplate.ttc"
 
         try:
+            # Change prefered font and it's size, if .ttc then specify index
             font = ImageFont.truetype(font_path, size=80, index=0)
         except IOError:
              font = ImageFont.load_default()
 
         text = input("Enter the copyright text: ")
-        draw.text((50, 50), "©" + text, font=font, fill=(255, 255, 255, 180))  # Semi-transparent white text
+
+         # fill -> Semi-transparent white text (ADJUST TO ALTER OPACITY)
+         # Adjust co-ordinates to position watermark during creation
+        draw.text((50, 50), "©" + text, font=font, fill=(255, 255, 255, 180))
 
         while True:
             save_path = input("Enter the path to store the watermark: ")
-            if validate_path(save_path, check_is_dir=True):  # Check if it's a valid directory
+            if validate_path(save_path, check_is_dir=True):
                 try:
                     watermark_path = os.path.join(save_path, "watermark.png")
                     image.save(watermark_path)
@@ -75,10 +79,10 @@ def process_image_with_watermark(input_image_path, output_image_path, watermark_
     # Create a transparent image for combining
     transparent = Image.new("RGBA", image.size)
     transparent.paste(image, (0, 0))
-    transparent.paste(watermark, position, mask=watermark)  # Use mask to handle transparency
+    transparent.paste(watermark, position, mask=watermark)
 
     # Convert back to RGB if necessary and save the image
-    output_image = transparent.convert("RGB")  # Remove alpha for saving as jpg
+    output_image = transparent.convert("RGB")
     output_image.save(output_image_path)
 
 
@@ -95,7 +99,6 @@ def add_watermark(input_folder, output_folder, watermark_path, padding=10):
             # Apply the watermark using the processing function
             process_image_with_watermark(input_image_path, output_image_path, watermark_path, padding)
 
-            # Update the progress bar
             pbar.update(1)
 
 
@@ -104,7 +107,7 @@ def have_watermark():
     while True:
         choice = input("Do you have a watermark? Enter 'n' to create one, or 'y' to proceed: ").lower().strip()
         if choice == 'n':
-            return create_watermark()  # Create and return the path of the watermark
+            return create_watermark()
         elif choice == 'y':
             return True
         else:
@@ -138,7 +141,7 @@ def entry():
             print("Invalid watermark path. Please try again.")
 
     print("Watermark process will begin.")
-    add_watermark(input_folder, output_folder, watermark_path, padding=80)
+    add_watermark(input_folder, output_folder, watermark_path, padding=80) # -> Adjust Padding here
     print("Watermark added, please check output directory.")
 
 
