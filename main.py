@@ -1,79 +1,21 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
 import sys
+from tqdm import tqdm  # Progress bar
 
-
-# Get the image path through sys argv
-def get_path():
-    if len(sys.argv) < 2:
-        print("Please add source directory")
-        sys.exit(1) 
-    elif len(sys.argv) > 2:
-        print("Too many arguments")
-        sys.exit(1)
+def validate_path(source_path, check_is_dir=False):
+    if check_is_dir:
+        if os.path.exists(source_path) and os.path.isdir(source_path):
+            return True
+        else:
+            print("Directory doesn't exist")
+            return False
     else:
-        return sys.argv[1]
-
-
-# Check if image path exists
-def validate_path(source_path):
-    if os.path.exists(source_path) and os.path.isdir(source_path):
-        return True
-    else:
-        print("Directory doesn't exist")
-        sys.exit(1)  
-
-
-# Retrieve the image width
-def get_image_width(path):
-    image_width = []
-    files = os.listdir(path)
-    
-    if not files:
-        print("No files found in the directory.")
-        sys.exit(1)
-
-    for filename in files:
-        filename = filename.lower()
-        if filename and filename.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-            img_path = os.path.join(path, filename)
-            try:
-                with Image.open(img_path) as img:
-                    width = img.width
-                    image_width.append(width)
-            except IOError:
-                print(f"Error opening {filename}, skipping...")
-
-    return image_width
-
-
-# Retrive the watermark width
-def get_watermark_width(w_path=None):
-    if w_path is None:
-        while True:
-            w_path = input("Enter the path containing the watermark: ")
-            if validate_path(w_path):  # Check if the path is valid
-                break  # Exit loop once the path is validated
-            else:
-                print("Invalid path, please try again.")
-
-    for filename in os.listdir(w_path):
-        print(w_path)
-        if filename.endswith('.png'):
-            watermark_path = os.path.join(w_path, filename)
-            print(watermark_path)
-            try:
-                with Image.open(watermark_path) as img:
-                    width = img.width
-                    print(width)
-                    return width
-            except IOError:
-                print(f"Error opening {filename}, skipping...")
-
-    print("No valid watermark image found in the directory.")
-    return None  # Return None if no valid watermark image is found
-
-
+        if os.path.exists(source_path) and os.path.isfile(source_path):
+            return True
+        else:
+            print("File doesn't exist")
+            return False
 
 # Create watermark if user doesn't have one
 def create_watermark():
@@ -83,82 +25,121 @@ def create_watermark():
         except ValueError:
             print("Invalid width unit. Please enter an integer.")
             continue
-        
         try:
             h = int(input("Enter the height of the watermark: "))
         except ValueError:
             print("Invalid height unit. Please enter an integer.")
             continue
-        
-        # Create a new image with transparent background (RGBA mode)
-        image = Image.new("RGBA", (w, h), (0, 0, 0, 0))  # (0, 0, 0, 0) is fully transparent
 
-        # Create a drawing context
+        image = Image.new("RGBA", (w, h), (0, 0, 0, 0))  # Fully transparent image
         draw = ImageDraw.Draw(image)
 
-        # Add some text to the image
-        # Load a better font if available, or use default
+        font_path = "/System/Library/Fonts/Supplemental/Copperplate.ttc"
+
         try:
-            font = ImageFont.truetype("arial.ttf", size=30)  # You can adjust the font size
+            font = ImageFont.truetype(font_path, size=80, index=0)
         except IOError:
-            font = ImageFont.load_default()  # Fallback to default font if TTF is not available
+             font = ImageFont.load_default()
 
         text = input("Enter the copyright text: ")
-        draw.text((50, 50), text + "©", font=font, fill=(255, 255, 255, 128))  # Semi-transparent white text
+        draw.text((50, 50), "©" + text, font=font, fill=(255, 255, 255, 180))  # Semi-transparent white text
 
-        # Loop until a valid path is provided
         while True:
             save_path = input("Enter the path to store the watermark: ")
-            if validate_path(save_path):
-                # Save the image as a PNG (preserves transparency)
+            if validate_path(save_path, check_is_dir=True):  # Check if it's a valid directory
                 try:
                     watermark_path = os.path.join(save_path, "watermark.png")
                     image.save(watermark_path)
                     print(f"Watermark saved at {watermark_path}")
-                    get_watermark_width(save_path)
+                    return watermark_path
                 except Exception as e:
                     print(f"Error saving the image: {e}")
-                    break  
+                    break
             else:
-                print("Invalid path, please try again.")
+                print("Invalid directory, please try again.")
         break
 
 
+def process_image_with_watermark(input_image_path, output_image_path, watermark_path, padding):
+    # Load the original image and the watermark
+    image = Image.open(input_image_path).convert("RGBA")
+    watermark = Image.open(watermark_path).convert("RGBA")
 
-# Check if user has a watermark
-def get_watermark():
+    # Get dimensions of both the image and the watermark
+    image_width, image_height = image.size
+    watermark_width, watermark_height = watermark.size
+
+    # Calculate the position for the watermark (bottom-right corner with padding)
+    position = (image_width - watermark_width - padding, image_height - watermark_height - padding)
+
+    # Create a transparent image for combining
+    transparent = Image.new("RGBA", image.size)
+    transparent.paste(image, (0, 0))
+    transparent.paste(watermark, position, mask=watermark)  # Use mask to handle transparency
+
+    # Convert back to RGB if necessary and save the image
+    output_image = transparent.convert("RGB")  # Remove alpha for saving as jpg
+    output_image.save(output_image_path)
+
+
+def add_watermark(input_folder, output_folder, watermark_path, padding=10):
+    images = [f.lower() for f in os.listdir(input_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    print (len(images))
+
+    # Initialize the progress bar
+    with tqdm(total=len(images), desc="Adding watermark", unit="image") as pbar:
+        for image in images:
+            input_image_path = os.path.join(input_folder, image)
+            output_image_path = os.path.join(output_folder, image)
+
+            # Apply the watermark using the processing function
+            process_image_with_watermark(input_image_path, output_image_path, watermark_path, padding)
+
+            # Update the progress bar
+            pbar.update(1)
+
+
+
+def have_watermark():
     while True:
-        choice = input("Do you have a watermark? If not, enter 'n' to create or else 'y': ").lower().strip()
-        if choice == 'y':
-           return get_watermark_width()
-            
-        elif choice == 'n':
-            return create_watermark()           
+        choice = input("Do you have a watermark? Enter 'n' to create one, or 'y' to proceed: ").lower().strip()
+        if choice == 'n':
+            return create_watermark()  # Create and return the path of the watermark
+        elif choice == 'y':
+            return True
         else:
-            print("Invalid response")
-    
+            print("Invalid response. Please enter 'y' or 'n'.")
 
 
 
-# Entry point of application
 def entry():
-    # Get the source path
-    source_path = get_path()
+    while True:
+        input_folder = input("Enter the path to the images: ").strip()
+        if validate_path(input_folder, check_is_dir=True):
+            break
 
-    # Validate source path
-    if not validate_path(source_path):
-        return  # Exit if the source path is not valid
+    while True:
+        output_folder = input("Enter the output path for the images: ").strip()
+        if os.path.exists(output_folder):
+            break
+        else:
+            print(f"Output folder '{output_folder}' does not exist. Creating it now.")
+            os.makedirs(output_folder)
 
-    # Get the image width for the source images
-    image_width = get_image_width(source_path)
+    if not have_watermark():
+        print("No watermark created or provided. Exiting.")
+        return
 
-    # Get the watermark width
-    watermark_width = get_watermark()
+    while True:
+        watermark_path = input("Enter the path to the watermark: ").strip()
+        if validate_path(watermark_path, check_is_dir=False):
+            break
+        else:
+            print("Invalid watermark path. Please try again.")
 
-    # Proceed with further processing, such as applying the watermark
-    print(f"Image width: {image_width}")
-    print(f"Watermark width: {watermark_width}")
-
+    print("Watermark process will begin.")
+    add_watermark(input_folder, output_folder, watermark_path, padding=80)
+    print("Watermark added, please check output directory.")
 
 
 
@@ -167,7 +148,6 @@ def main():
         entry()
     except EOFError:
         sys.exit("\nExiting application...")
-        
 
 if __name__ == "__main__":
     main()
