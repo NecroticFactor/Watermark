@@ -118,6 +118,3 @@ h = int(input("Enter the height of the watermark: "))
 - To move the watermark further to the left, change the `(50, 50)` position to something like `(10, 50)`.
 - To add more space around the watermark, increase the `padding` value.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
